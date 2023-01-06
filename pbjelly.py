@@ -5,12 +5,12 @@ import asyncio
 import os
 import sys
 import traceback
-import datetime
 import json
 import logging
 
 from os.path import exists as fileExists
 from asyncpushbullet import AsyncPushbullet, InvalidKeyError, PushbulletError, LiveStreamListener
+from datetime import datetime, timedelta
 
 API_KEY = ""
 deviceNickname = 'scoreboard'
@@ -36,24 +36,40 @@ def main():
                     logging.info(f"Listening for pushes to {deviceNickname} forever...")
                     async for push in lsl:
                        body = push['body']
-                       d = datetime.datetime.now().strftime("%Y-%m-%dT01:00:00-05:00")
+                       d = datetime.now().strftime("%Y-%m-%dT01:00:00-05:00")
                        logging.info(f"Push received: \n {d}\t {body}")
                        fj = {"capacity": 1010, "resetDate": f"{d}"}
                        sj = {"capacity": 2450, "resetDate": f"{d}"}
                        if body.lower() != 'reset filter' and body.lower() != 'reset softener':
                            if fileExists("filter.json"):
                                f = open("filter.json", "r").read()
+                               fdate = json.loads(f)['resetDate']
+                               t1 = datetime.strptime(d, "%Y-%m-%dT01:00:00-05:00")
+                               t2 = datetime.strptime(fdate, "%Y-%m-%dT01:00:00-05:00")
+                               tdiff = t1 - t2
+                               fdatediff = tdiff.days
                            else:
                                f = "file not found"
+                               fdatediff = '-1'
                            if fileExists("softener.json"):
                                s = open("softener.json", "r").read()
+                               sdate = json.loads(s)['resetDate']
+                               t1 = datetime.strptime(d, "%Y-%m-%dT01:00:00-05:00")
+                               t2 = datetime.strptime(sdate, "%Y-%m-%dT01:00:00-05:00")
+                               sdiff = t1 - t2
+                               sdatediff = sdiff.days
                            else:
                                s = "file not found"
-                           helpText = f"""Filter Status - to reset enter 'reset filter':
+                               sdatediff = '-1'
+                           helpText = f"""Filter Status:
 {f}
+{fdatediff} days since last regen
+to reset enter 'reset filter'
 
-Softener Status - to reset enter 'reset softener':
-{s}"""
+Softener Status:
+{s}
+{sdatediff} days since last regen
+to reset enter 'reset softener'"""
                            push = await pb.async_push_note(title="Hello", body=f"{helpText}")
                        if body.lower() == 'reset filter':
                            f = open("filter.json", "w")
