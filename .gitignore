@@ -1,3 +1,5 @@
 *.json
 api_key.txt
+streamlabs_token.txt
+sltest.py
 .venv
