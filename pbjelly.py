@@ -3,6 +3,7 @@
 
 import asyncio
 import os
+import glob
 import sys
 import traceback
 import json
@@ -22,6 +23,7 @@ EI = 1
 EPBE = 2
 EO = 3
 logging.root.setLevel(logging.INFO)
+png_path = '/home/pi/pbjelly/*.png'
 
 def main():
     async def _run():
@@ -48,26 +50,8 @@ def main():
                        body = push['body']
                        d = datetime.now().strftime("%Y-%m-%dT01:00:00-05:00")
                        logging.info(f"Push received: \n {d}\t {body}")
-                       fj = {"capacity": 1010, "resetDate": f"{d}"}
-                       sj = {"capacity": 2450, "resetDate": f"{d}"}
-                       if body.lower() != 'reset filter' and body.lower() != 'reset softener':
-                           if fileExists("filter.json"):
-                               with open('./filter.json', 'r') as openfile:
-                                   filterObj = json.load(openfile)
-                               fdate = filterObj['resetDate']
-                               sinceReset1 = url + "/v1/locations/" + locationId + "/readings/water-usage?groupBy=day&startTime=" + fdate
-                               res1 = requests.get(sinceReset1, headers=headers)
-                               usage1 = sum(map(lambda x: float(x['volume']), res1.json()['readings']))
-                               fRemaining = int(filterObj['capacity'] - (usage1*.72))
-                               t1 = datetime.strptime(d, "%Y-%m-%dT01:00:00-05:00")
-                               t2 = datetime.strptime(fdate, "%Y-%m-%dT01:00:00-05:00")
-                               tdiff = t1 - t2
-                               fdatediff = tdiff.days
-                           else:
-                               filterObj = "file not found"
-                               fdatediff = '-1'
-                               fRemaining = '-1'
-
+                       sj = {"capacity": 2300, "resetDate": f"{d}"}
+                       if body.lower().strip() != 'reset':
                            if fileExists("softener.json"):
                                with open('./softener.json', 'r') as openfile:
                                    softenerObj = json.load(openfile)
@@ -84,24 +68,19 @@ def main():
                                softenerObj = "file not found"
                                sdatediff = '-1'
                                sRemaining = '-1'
-                           helpText = f"""Filter Status:
-{filterObj}
-{fdatediff} days since last regen
-{fRemaining} gallons until next regen
-to reset enter 'reset filter'
-
-Softener Status:
+                           helpText = f"""Softener Status:
 {softenerObj}
 {sdatediff} days since last regen
 {sRemaining} gallons until next regen
-to reset enter 'reset softener'"""
+to reset enter 'reset'"""
                            push = await pb.async_push_note(title="Hello", body=f"{helpText}")
-                       if body.lower() == 'reset filter':
-                           f = open("filter.json", "w")
-                           f.write(json.dumps(fj))
-                           f.close() 
-                           push = await pb.async_push_note(title="Filter Reset", body=f"{json.dumps(fj)}")
-                       if body.lower() == 'reset softener':
+                           # The actual upload
+                           for file in glob.glob(png_path):
+                               info = await pb.async_upload_file(file)
+
+                               # Push as a file:
+                               await pb.async_push_file(info["file_name"], info["file_url"], info["file_type"],title="",body="")
+                       if body.lower().strip() == 'reset':
                            f = open("softener.json", "w")
                            f.write(json.dumps(sj))
                            f.close() 
